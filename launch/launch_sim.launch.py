@@ -4,8 +4,9 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 
 from launch_ros.actions import Node
 
@@ -13,6 +14,14 @@ from launch_ros.actions import Node
 def generate_launch_description():
 
     package_name = 'my_bot'
+    world = LaunchConfiguration('world')
+    world_arg = DeclareLaunchArgument(
+        'world',
+        default_value=os.path.join(
+            get_package_share_directory(package_name), 'worlds', 'obstacles.sdf'
+        ),
+        description='Path to the Gazebo world file'
+    )
 
     # 1. Start robot_state_publisher
     rsp = IncludeLaunchDescription(
@@ -36,7 +45,7 @@ def generate_launch_description():
             )
         ),
         launch_arguments={
-            'gz_args': '-r empty.sdf'
+            'gz_args': ['-r "', world, '"']
         }.items()
     )
 
@@ -108,7 +117,16 @@ def generate_launch_description():
     )
 
 
+    # 9. Bridge simulated LiDAR scans to ROS 2
+    scan_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=['/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan'],
+        output='screen'
+    )
+
     return LaunchDescription([
+        world_arg,
         rsp,
         gazebo,
         spawn_entity,
@@ -117,4 +135,5 @@ def generate_launch_description():
         tf_bridge,
         clock_bridge,
         joint_state_bridge,
+        scan_bridge,
     ])
